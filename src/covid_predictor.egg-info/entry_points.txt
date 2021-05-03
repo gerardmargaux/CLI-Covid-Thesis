@@ -1,0 +1,3 @@
+[console_scripts]
+covid-predictor = covid_predictor.cli:predictor
+

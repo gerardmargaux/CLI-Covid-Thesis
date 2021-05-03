@@ -1,0 +1,8 @@
+click
+pandas
+pydantic
+pycountry
+sklearn
+requests
+matplotlib
+pytrends

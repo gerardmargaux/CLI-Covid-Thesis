@@ -1,0 +1,12 @@
+Metadata-Version: 1.2
+Name: covid-predictor
+Version: 0.0.0
+Summary: Covid predictor
+Home-page: UNKNOWN
+Author: Margaux Gerard
+Author-email: margaux.gerard@accenture.com
+License: UNKNOWN
+Description: UNKNOWN
+Platform: UNKNOWN
+Provides: covid_predictor
+Requires-Python: >=3

@@ -1,0 +1,23 @@
+{
+
+    "task": [
+        {
+            "name": "prediction",
+            "days_to_use": 20,
+            "days_to_predict": 10, 
+            "predict_one": false,
+            "target": "total hospi",
+            "model": "encoder-decoder",
+            "date_begin": "2020-02-01",
+            "plot": true
+        }, 
+
+        {
+            "name": "collection",
+            "collection": "hourly",
+            "topics": ["Fièvre", "Toux", "Mal de gorge"], 
+            "european_geo": false
+        }
+    ]
+
+}
