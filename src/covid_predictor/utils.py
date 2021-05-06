@@ -16,11 +16,11 @@ from functools import reduce, partial
 from pathlib import Path
 import requests
 from requests.exceptions import ReadTimeout
-import pytrends
 from pytrends.exceptions import ResponseError
 from pytrends.request import TrendReq
 from pytrends.dailydata import get_daily_data
 import io
+import networkx as nx
 import operator
 import random
 import os.path
@@ -463,12 +463,13 @@ def create_df_trends(url_trends: str, list_topics: Dict[str, str], geo: Dict[str
     for k, v in geo.items():
         all_trends = []
         for term in list_topics.keys():
-            path = f"{url_trends}{k}-{term}.csv"
-            if url_trends[:4] == "http":
+            path = f"{url_trends}/{k}-{term}.csv"
+            #if url_trends[:4] == "http":
+            try:
                 encoded_path = requests.get(path).content
                 df_trends = pd.read_csv(io.StringIO(encoded_path.decode("utf-8")), parse_dates=['date'],
                                         date_parser=date_parser).rename(columns={"date": "DATE"})
-            else:
+            except:
                 df_trends = pd.read_csv(path, parse_dates=['date'], date_parser=date_parser).rename(columns={"date": "DATE"})
             df_trends['LOC'] = k
             df_trends.rename(columns=renaming, inplace=True)
@@ -1265,3 +1266,13 @@ def _fetch_data(pytrends, build_payload, timeframe: str) -> pd.DataFrame:
             if attempts > 3:
                 print('Failed after 3 attemps, abort fetching.')
                 break
+            
+"""------------------------------- PREDICTION -------------------------------"""
+def compute_error(Y_expected, Y_actual) -> pd.DataFrame:
+    MAE = mean_absolute_error(Y_expected, Y_actual, multioutput="raw_values")
+    MSE = mean_squared_error(Y_expected, Y_actual, multioutput="raw_values")
+    values = {}
+    for t in range(n_forecast):
+        values[f'MAE(t+{t+1})'] = [MAE[t]]
+        values[f'MSE(t+{t+1})'] = [MSE[t]]
+    return pd.DataFrame(values)

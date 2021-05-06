@@ -6,3 +6,7 @@ sklearn
 requests
 matplotlib
 pytrends
+pytest
+tensorflow
+networkx
+plotly
