@@ -14,6 +14,10 @@ url_department_france = Path(__file__).parents[2]/"data/france_departements.csv"
 url_hospi_france_new = Path(__file__).parents[2]/"data/hospi/fr-covid-hospi.csv"
 url_hospi_france_tot = Path(__file__).parents[2]/"data/hospi/fr-covid-hospi-total.csv"
 
+global n_forecast_final
+global target_idx
+global predict_one_final
+
 
 def prediction(model_name, model, df, parameters_dg, geo): 
     
@@ -28,6 +32,9 @@ def prediction(model_name, model, df, parameters_dg, geo):
     list_topics=parameters_dg["list_topics"]
     predict_one=parameters_dg["predict_one"]
     cumsum=parameters_dg["cumsum"]
+    
+    predict_one_final = predict_one
+    n_forecast_final = n_forecast
     
     validation_metrics = [metric_get("MeanSquaredError"), metric_get('MeanAbsoluteError'), 
                       metric_get('RootMeanSquaredError')]
@@ -89,8 +96,98 @@ def prediction(model_name, model, df, parameters_dg, geo):
         y_train = old_data_gen.get_y(train_idx, scaled=True)
         y_pred = np.squeeze(model.predict(x_test, batch_size=batch_input))
         y_pred_real = old_data_gen.inverse_transform_y(y_pred, idx=[max(train_idx)], geo=new_data_gen.loc_init, return_type='dict_df')
+    
+    else:
+        list_hosp_features = [
+            'NEW_HOSP',
+            'TOT_HOSP',
+            #'TOT_HOSP_log',
+            #'TOT_HOSP_pct',
+        ]
+
+        if europe:
+            old_data_gen = DataGenerator(df, n_samples, n_forecast, target, scaler_generator=scaler_generator,
+                        augment_merge=3, augment_adjacency=european_adjacency, augment_population=augment_population,
+                        predict_one=predict_one, cumsum=cumsum, data_columns=list_hosp_features)
+            
+            new_data_gen = DataGenerator(merged_df, n_samples, n_forecast, target, scaler_generator=scaler_generator, scaler_type='batch',
+                                augment_merge=3, augment_adjacency=european_adjacency, augment_population=augment_population,
+                                predict_one=predict_one, cumsum=cumsum, data_columns=list_hosp_features)
+        else:
+            old_data_gen = DataGenerator(df, n_samples, n_forecast, target, scaler_generator=scaler_generator,
+                        augment_merge=3, augment_adjacency=france_region_adjacency, augment_population=augment_population,
+                        predict_one=predict_one, cumsum=cumsum, data_columns=list_hosp_features)
+            
+            new_data_gen = DataGenerator(merged_df, n_samples, n_forecast, target, scaler_generator=scaler_generator, scaler_type='batch',
+                                augment_merge=3, augment_adjacency=france_region_adjacency, augment_population=augment_population,
+                                predict_one=predict_one, cumsum=cumsum, data_columns=list_hosp_features)
+            
+        max_train = old_data_gen.batch_size
+        train_idx = np.array(range(max_train))
+        test_idx = [new_data_gen.batch_size-1]
+        target_idx = new_data_gen.target_idx
+
+        X_train_1 = new_data_gen.get_x(train_idx, scaled=False)
+        Y_train = old_data_gen.get_y(train_idx, scaled=False)
+        X_test_1 = new_data_gen.get_x(test_idx, scaled=False, geo=new_data_gen.loc_init)
+
+        model_generator = get_baseline
         
-    # Modiffication of the prediction format
+        batch_size_train = len(X_train_1)
+        batch_size_test = len(X_test_1)
+
+        # First prediction based only on the hospitalizations
+        first_model = model_generator(n_forecast=n_forecast, target_idx=target_idx, batch_input_shape=(batch_size_train, n_samples, old_data_gen.n_features))
+        Y_test_pred_1 = first_model.predict(X_test_1)
+        Y_train_pred_1 = first_model.predict(X_train_1)
+        df_train_predicted_1 = old_data_gen.inverse_transform_y(Y_train_pred_1, idx=train_idx, return_type='dict_df', 
+                                        inverse_tranform=False)
+        df_test_predicted_1 = new_data_gen.inverse_transform_y(Y_test_pred_1, idx=test_idx, return_type='dict_df', 
+                                                geo=new_data_gen.loc_init, inverse_tranform=False)
+        df_train_1 = old_data_gen.inverse_transform_y(Y_train, idx=train_idx, return_type='dict_df',
+                                                inverse_tranform=False)
+        
+        data_dg_c = [f'{topic}(t{i})' for i in range(-n_samples+1, 0, 1) for topic in list_topics] + [topic for topic in list_topics]
+        target_df_c = [f'C(t+{i})' for i in range(1, n_forecast+1)]
+        target_renaming = {new_data_gen.target_columns[i]: target_df_c[i] for i in range(n_forecast)}
+        df_train_c = {loc : new_data_gen.df[loc].iloc[train_idx][data_dg_c] for loc in new_data_gen.df}
+        threshold = 0.3
+        threshold_fun = lambda x: [1+threshold if y >= 1+threshold else 1-threshold if y <= 1-threshold else y for y in x]
+        for loc in df_train_c:
+            df_train_c[loc][new_data_gen.target_columns] = df_train_1[loc] / df_train_predicted_1[loc]
+            df_train_c[loc] = df_train_c[loc].rename(columns=target_renaming)
+            df_train_c[loc] = df_train_c[loc].replace([-np.inf, np.inf, np.nan], 1)
+            df_train_c[loc][target_df_c] = df_train_c[loc][target_df_c].apply(threshold_fun)
+        
+        df_train_c_old = pickle.load(open( Path(__file__).parents[2]/f"models/{model_name}_df_train_c.p", "rb" ))
+            
+        dg_2 = DataGenerator(df_train_c_old, n_samples, n_forecast, target='C', scaler_generator=scaler_generator, 
+                          scaler_type='batch', augment_merge=0, predict_one=False, cumsum=False,
+                          data_columns=[k for k in list_topics], no_lag=True)
+        dg_2.set_loc_init(new_data_gen.loc_init)  # consider the other localisations as being augmented
+        
+        dg_2_new = DataGenerator(df_train_c, n_samples, n_forecast, target='C', scaler_generator=scaler_generator, 
+                          scaler_type='batch', augment_merge=0, predict_one=False, cumsum=False,
+                          data_columns=[k for k in list_topics], no_lag=True)
+        dg_2_new.set_loc_init(new_data_gen.loc_init)  # consider the other localisations as being augmented
+            
+        X_train_2 = dg_2.get_x(scaled=True)
+        C_train = dg_2.get_y(scaled=False)
+        
+        dg_2_new.set_scaler_values_x(dg_2.scaler_x)
+        X_test_2 = dg_2_new.get_x(test_idx, scaled=True, use_previous_scaler=True, geo=dg_2_new.loc_init)
+        batch_size_test = len(X_test_2)
+        
+        C_test_pred_2 = model.predict(X_test_2, batch_size=batch_size_test)
+        df_test_c_predicted = dg_2_new.inverse_transform_y(C_test_pred_2, idx=test_idx, return_type='dict_df', inverse_tranform=False, geo=dg_2_new.loc_init)
+        
+        y_pred_real = {}
+        inverse_columns = {j:i for i, j in parameters_dg["target_remaining"].items()}
+        for loc in df_test_c_predicted:
+            y_pred_real[loc] = df_test_predicted_1[loc] * df_test_c_predicted[loc].rename(columns=inverse_columns)
+
+
+    # Modification of the prediction format
     pred = y_pred_real[geo].reset_index().drop(columns=["LOC", "DATE"])
     range_dates = pd.date_range(start=datetime.today(), end=datetime.today() + timedelta(days=n_forecast-1))
     pred.columns = [date.strftime('%Y-%m-%d') for date in range_dates]
@@ -98,7 +195,7 @@ def prediction(model_name, model, df, parameters_dg, geo):
     final_pred.columns = ["Predictions"]
     final_pred.index.name = "DATE"
     
-    # Modiffication of the hospi format
+    # Modification of the hospi format
     final_hospi = df_hospi[geo].reset_index()
     to_drop = [elem for elem in list(final_hospi.columns) if elem not in [target, "DATE"]]
     final_hospi = final_hospi.drop(columns=to_drop).set_index("DATE")

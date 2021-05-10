@@ -228,11 +228,12 @@ class DataGenerator:
                 self.scaler_y = None
             else:
                 self.scaler_y = {loc: self.scaler_generator() for loc in self.idx}
-    
-    
-    def set_scaler_y(self, new_scaler_y):
-        self.scaler_y = new_scaler_y
-        
+
+    def set_scaler_values_x(self, scaler_x: Dict):
+        """
+        copies the values of a scaler dict to this scaler
+        """
+        self.scaler_x = deepcopy(scaler_x)
 
     def set_loc_init(self, loc: Dict[str, str]):
         """
@@ -381,7 +382,7 @@ class DataGenerator:
         return np.concatenate(Y)
 
     def inverse_transform_y(self, unscaled: np.array, geo: Union[str, Dict[str, str]] = None, idx: np.array = None,
-                            return_type: str = 'array') -> Union[
+                            return_type: str = 'array', inverse_tranform: bool = True) -> Union[
         np.array, Dict[str, pd.DataFrame], Dict[str, np.array]]:
         """
         inverse transform the values provided, in order to get unscaled data
@@ -394,14 +395,17 @@ class DataGenerator:
             - array: return a 2D np.array of values
             - dict_array: return a dict of {loc: np.array}
             - dict_df: return a dict of {loc: pd.DataFrame}
+        :param inverse_tranform: don't use any inverse tranform
         """
         if geo is None:
             geo = self.idx  # only the keys are needed
         elif isinstance(geo, str):
             geo = {geo: self.idx[geo]}
         if idx is None or self.scaler_type != "batch":  # the scaler_type must be 'whole' or 'window'
+            idx_date = self.relative_idx
             idx = self.relative_idx
         else:
+            idx_date = np.array(idx)
             idx = np.array(range(len(idx)))
 
         val = np.zeros(unscaled.shape)
@@ -412,11 +416,14 @@ class DataGenerator:
             for loc in geo:
                 loc_idx = idx + offset
                 init_shape = unscaled[loc_idx, :].shape
-                val[loc_idx, :] = self.scaler_y[loc].inverse_transform(unscaled[loc_idx, :].reshape((-1, 1))).reshape(
-                    init_shape)
+                if inverse_tranform:
+                    val[loc_idx, :] = self.scaler_y[loc].inverse_transform(unscaled[loc_idx, :].reshape((-1, 1))).reshape(
+                        init_shape)
+                else:
+                    val[loc_idx, :] = unscaled[loc_idx, :]
                 offset += batch_size  # increment the offset to get the values from the next batch
                 if return_type == 'dict_df':
-                    dates_used = self.date_range[idx]
+                    dates_used = self.date_range[idx_date]
                     multi_index = pd.MultiIndex.from_product([[loc], dates_used], names=['LOC', 'DATE'])
                     return_df[loc] = pd.DataFrame(val[loc_idx, :], columns=self.target_columns).set_index(
                         multi_index)
@@ -425,11 +432,12 @@ class DataGenerator:
         elif self.scaler_type == "window":
             offset = 0  # current offset in the Y tensor
             batch_size = len(idx)
-            for loc in geo:
-                for j, i in enumerate(idx):  # TODO implement inverse transform for window and corresponding return type
-                    val[i + offset, :] = self.scaler_y[loc][i].inverse_transform(
-                        unscaled[i + offset, :].reshape((-1, 1))).reshape((1, -1))
-                offset += batch_size  # increment the offset to get the values from the next batch
+            if inverse_tranform:
+                for loc in geo:
+                    for j, i in enumerate(idx):  # TODO implement inverse transform for window and corresponding return type
+                        val[i + offset, :] = self.scaler_y[loc][i].inverse_transform(
+                            unscaled[i + offset, :].reshape((-1, 1))).reshape((1, -1))
+                    offset += batch_size  # increment the offset to get the values from the next batch
         return val if return_type == 'array' else return_df
 
     def loc_to_idx(self, loc):  # return absolute idx

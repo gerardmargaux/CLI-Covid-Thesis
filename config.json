@@ -4,7 +4,7 @@
         {
             "name": "collection",
             "collection": "hourly",
-            "topics": ["Fièvre", "Toux", "Mal de gorge"], 
+            "topics": ["Fièvre", "Toux", "Mal de gorge", "test PCR"], 
             "european_geo": false
         }, 
 
@@ -19,7 +19,7 @@
             "model": [
                 {
                     "type_name": "trainable",
-                    "name": "dense", 
+                    "name": "assembler", 
                     "days_to_use": 10,
                     "days_to_predict": 10,
                     "date_begin": "2020-02-01",

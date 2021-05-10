@@ -6,6 +6,7 @@ import pickle
 import os
 from datetime import datetime, timedelta
 from tensorflow.keras.models import load_model
+from pytrends.request import TrendReq
 
 from covid_predictor.training import train_model
 from covid_predictor.collection import actualize_trends, actualize_trends_using_daily, actualize_hospi
@@ -47,7 +48,16 @@ def run_collection():
     
     chosen_topics = {}
     for elem in config["topics"]:
-        chosen_topics[elem] = list_topics[elem]
+        if elem in list_topics:
+            chosen_topics[elem] = list_topics[elem]
+        else:
+            pytrend = TrendReq(hl='en-US', tz=360)
+            
+            pytrend.build_payload(kw_list=[elem])
+            suggs = pytrend.related_topics()
+            val = list(suggs.values())[0]["top"]
+            print(val)
+            chosen_topics[elem] = val["topic_mid"][0]
 
     # Actualize hospitalizations data
     actualize_hospi()
@@ -96,12 +106,18 @@ def run_training():
         
         chosen_topics = {}
         for elem in config_model["topics"]:
-            chosen_topics[elem] = list_topics[elem]
+            if os.path.exists(Path(__file__).parents[2]/f"data/trends/model/{config['localisation']}-{elem}.csv"):
+                chosen_topics[elem] = list_topics[elem]
+            else: 
+                raise ValueError(f"The topic {elem} has not been collected, be sure to run data collection before training the model.")
             
         """----------------------- TRAINING ----------------------- """
         # A pretained model already exists
         if os.path.exists(Path(__file__).parents[2]/f"models/{config_model['name']}_dg_param.json"):
-            user_input = input("Do you want to train reuse a model that was already trained ? (y/n) ")
+            with open(Path(__file__).parents[2]/f"models/{config_model['name']}_dg_param.json", 'r') as f:
+                param = json.load(f)
+            date_model = param["date"]
+            user_input = input(f"Do you want to reuse the model that was already trained on {date_model} ? (y/n) ")
             
             # A previously trained model should be reused
             if user_input == "y":
@@ -154,10 +170,10 @@ def run_training():
         """----------------------- PREDICTION ----------------------- """
         loaded_df = pickle.load(open( Path(__file__).parents[2]/f"models/{config_model['name']}_merged_df.p", "rb" ))
         final_pred, final_hospi = prediction(model_name=config_model['name'],
-                                    model=model,
-                                    df=loaded_df,
-                                    parameters_dg=parameters_dg,
-                                    geo=config["localisation"])
+                                            model=model,
+                                            df=loaded_df,
+                                            parameters_dg=parameters_dg,
+                                            geo=config["localisation"])
         
     if config["print_results_on_terminal"]:
         print(f"{config_model['days_to_predict']}-days prediction of {config['target']} for {config['localisation']}")
