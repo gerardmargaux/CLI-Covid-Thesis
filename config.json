@@ -19,12 +19,12 @@
             "model": [
                 {
                     "type_name": "trainable",
-                    "name": "assembler", 
+                    "name": "dense", 
                     "days_to_use": 10,
                     "days_to_predict": 10,
                     "date_begin": "2020-02-01",
                     "epochs": 300, 
-                    "topics": ["Fièvre", "Toux", "Mal de gorge"],
+                    "topics": ["Fièvre", "Coronavirus disease 2019", "Vaccination"],
                     "scaler": "MinMax",
                     "predict_one": false,
                     "cumsum": false,
@@ -33,7 +33,7 @@
 
                 {
                     "type_name": "untrainable",
-                    "name": "baseline",
+                    "name": "linear-regression",
                     "days_to_use": 10,
                     "days_to_predict": 10
                 }

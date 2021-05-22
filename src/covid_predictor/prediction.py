@@ -159,7 +159,7 @@ def prediction(model_name, model, df, parameters_dg, geo):
             df_train_c[loc] = df_train_c[loc].replace([-np.inf, np.inf, np.nan], 1)
             df_train_c[loc][target_df_c] = df_train_c[loc][target_df_c].apply(threshold_fun)
         
-        df_train_c_old = pickle.load(open( Path(__file__).parents[2]/f"models/{model_name}_df_train_c.p", "rb" ))
+        df_train_c_old = pickle.load(open( Path(__file__).parents[2]/f"models/{model_name}_df_train_c_{target}.p", "rb" ))
             
         dg_2 = DataGenerator(df_train_c_old, n_samples, n_forecast, target='C', scaler_generator=scaler_generator, 
                           scaler_type='batch', augment_merge=0, predict_one=False, cumsum=False,
@@ -211,6 +211,9 @@ def prediction_reference(model, n_samples, n_forecast, target, geo, europe=False
     date_begin = "2020-02-01"
     
     if europe:
+        population = get_world_population(url_pop)
+        renaming = {v: k for k, v in european_geocodes.items()}
+        geocodes = {k: v for k, v in european_geocodes.items() if population[k] > 1_000_000}
         df_hospi = hospi_world(url_world, geocodes, renaming, new_hosp=True, date_begin=date_begin)
         
     else:

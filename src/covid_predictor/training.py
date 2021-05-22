@@ -237,7 +237,7 @@ def train_model(type_model, epochs, n_samples, n_forecast, target, date_begin, l
         df_trends[k] = df_trends[k].rolling(7, center=True).mean().dropna()
     merged_df = {k: pd.merge(df_hospi[k], df_trends[k], left_index=True, right_index=True).dropna() for k,v in geocodes.items()}
     
-    pickle.dump(merged_df, open(f"./models/{type_model}_merged_df.p", "wb" ))
+    pickle.dump(merged_df, open(f"./models/{type_model}_merged_df_{target}.p", "wb" ))
     
     if scaler_gen == "MinMax":
         scaler_generator = MinMaxScaler
@@ -343,7 +343,7 @@ def train_model(type_model, epochs, n_samples, n_forecast, target, date_begin, l
             df_train_c[loc] = df_train_c[loc].replace([-np.inf, np.inf, np.nan], 1)
             df_train_c[loc][target_df_c] = df_train_c[loc][target_df_c].apply(threshold_fun)
         
-        pickle.dump(df_train_c, open(f"./models/{type_model}_df_train_c.p", "wb" ))
+        pickle.dump(df_train_c, open(f"./models/{type_model}_df_train_c_{target}.p", "wb" ))
             
         dg_2 = DataGenerator(df_train_c, n_samples, n_forecast, target='C', scaler_generator=scaler_generator, 
                           scaler_type='batch', augment_merge=0, predict_one=False, cumsum=False,

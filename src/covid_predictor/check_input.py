@@ -14,12 +14,7 @@ class TargetEnum(Enum):
 
 class CollectionEnum(Enum):
     daily = "daily" 
-    hourly = "hourly"
-    
-
-class NameTrainEnum(Enum):
-    name1 = "training"
-    name2 = "train"   
+    hourly = "hourly" 
     
 
 class ModelTrainableEnum(Enum):
@@ -68,11 +63,11 @@ class CheckTrainable(BaseModel):
     cumsum: bool
     verbose: bool 
        
-    """@root_validator()
+    @root_validator()
     def check_days(cls, values):
-        if values.get("date_begin") >= values.get("date_end"):
-            raise ValueError('date_begin should be before date_end')
-        return values"""
+        if values.get("days_to_use") < values.get("days_to_predict"):
+            raise ValueError('The number of days to use should be greater or equal to the number of days to predict')
+        return values
     
 
 class CheckUntrainable(BaseModel):
