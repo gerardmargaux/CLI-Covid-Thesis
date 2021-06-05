@@ -2,6 +2,7 @@ from src.covid_predictor.utils import *
 from src.covid_predictor.DataGenerator import DataGenerator
 import unittest
 import pytest
+from os import fspath
 
 
 class TestDataGenerator(unittest.TestCase):
@@ -12,8 +13,8 @@ class TestDataGenerator(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:  # called once before running the tests
         date_begin = "2020-02-01"
-        url_world = Path(__file__).parents[0]/"data/hospi/world.csv"
-        url_pop = Path(__file__).parents[0]/"data/population.txt"
+        url_world = fspath(Path(__file__).parents[0]/"data/hospi/world.csv")
+        url_pop = fspath(Path(__file__).parents[0]/"data/population.txt")
         population = get_world_population(url_pop)
         renaming = {v: k for k, v in european_geocodes.items()}
         geocodes = {k: v for k, v in european_geocodes.items() if population[k] > 1_000_000}

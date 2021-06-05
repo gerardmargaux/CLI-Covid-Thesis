@@ -4,14 +4,14 @@
         {
             "name": "collection",
             "collection": "hourly",
-            "topics": ["Fièvre", "Toux", "Mal de gorge", "test PCR"], 
+            "topics": ["Fièvre", "Coronavirus disease 2019", "Vaccination"], 
             "european_geo": false
         }, 
 
         {
             "name": "training", 
             "model_type": "trainable",
-            "target": "TOT_HOSP",
+            "target": "NEW_HOSP",
             "localisation": "BE",
             "european_geo": false,
             "print_results_on_terminal": true,
@@ -20,10 +20,10 @@
                 {
                     "type_name": "trainable",
                     "name": "dense", 
-                    "days_to_use": 10,
-                    "days_to_predict": 10,
+                    "days_to_use": 30,
+                    "days_to_predict": 40,
                     "date_begin": "2020-02-01",
-                    "epochs": 300, 
+                    "epochs": 3500, 
                     "topics": ["Fièvre", "Coronavirus disease 2019", "Vaccination"],
                     "scaler": "MinMax",
                     "predict_one": false,
@@ -33,7 +33,7 @@
 
                 {
                     "type_name": "untrainable",
-                    "name": "linear-regression",
+                    "name": "baseline",
                     "days_to_use": 10,
                     "days_to_predict": 10
                 }

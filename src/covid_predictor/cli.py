@@ -9,10 +9,10 @@ from tensorflow.keras.models import load_model
 from pytrends.request import TrendReq
 
 from covid_predictor.training import train_model
-from covid_predictor.collection import actualize_trends, actualize_trends_using_daily, actualize_hospi
 from covid_predictor.check_input import CheckCollection, CheckGlobalTraining, CheckTrainable, CheckUntrainable
 from covid_predictor.utils import european_geocodes, french_region_and_be
 from covid_predictor.prediction import prediction, plot_prediction, prediction_reference
+from covid_predictor.data_collection import collect_data, generate_model_data, actualize_hospi
 
 list_topics = {
         'Fièvre': '/m/0cjf0',
@@ -44,7 +44,7 @@ def predictor():
     pass
 
 
-@predictor.command("collect", help="Collect the data needed for making a prediction.")
+@predictor.command("collect", help="Collect the freshest data needed for making a prediction.")
 def run_collection():
 
     with open(Path(__file__).parents[2]/"config.json", 'r') as f:
@@ -63,27 +63,33 @@ def run_collection():
             pytrend.build_payload(kw_list=[elem])
             suggs = pytrend.related_topics()
             val = list(suggs.values())[0]["top"]
-            print(val)
             chosen_topics[elem] = val["topic_mid"][0]
 
     # Actualize hospitalizations data
-    actualize_hospi()
+    actualize_hospi(european_geo=config["european_geo"])
     
-    # French regions and Belgium
-    if not config["european_geo"]:  
-        if config["collection"] == "hourly": # Hourly data collection
-            actualize_trends(french_region_and_be, chosen_topics, plot=False, only_hourly=False, refresh_daily=True)
-        else: # Daily data collection
-            actualize_trends_using_daily(french_region_and_be, chosen_topics, plot=False, refresh=True)
-    
-    # European data
+    # Geolocalisation that should be considered
+    if not config["european_geo"]:
+        geocodes = french_region_and_be
     else:
-        if config["collection"] == "hourly": # Hourly data collection
-            actualize_trends(european_geocodes, chosen_topics, plot=False, only_hourly=False, refresh_daily=True)
-        else: # Daily data collection
-            actualize_trends_using_daily(european_geocodes, chosen_topics, plot=False, refresh=True)
+        geocodes = european_geocodes
+    
+    # Collection of data  
+    if config["collection"] == "hourly": # Hourly data collection
+        collect_data("hourly", chosen_topics, geocodes)
+        collect_data("gap", chosen_topics, geocodes)
+        generate_model_data('hourly', chosen_topics, geocodes)
+        #actualize_trends(french_region_and_be, chosen_topics, plot=False, only_hourly=False, refresh_daily=True)
+    elif config["collection"] == "minimal": # Minimal data collection
+        collect_data("minimal", chosen_topics, geocodes)
+        collect_data("gap", chosen_topics, geocodes)
+        generate_model_data('minimal', chosen_topics, geocodes)
+        #actualize_trends_using_daily(french_region_and_be, chosen_topics, plot=False, refresh=True)
+    else:
+        collect_data("daily", chosen_topics, geocodes)
+        generate_model_data('daily', chosen_topics, geocodes)
             
-    print("End data collection")
+    print("End of data collection")
     
 
 @predictor.command("run", help="Run the prediction of the number of hospitalizations.")
@@ -122,6 +128,7 @@ def run_training():
         target_name = config["target"]
         config_model = config["model"][0]
         check = CheckTrainable(**config_model)
+        pretrained = False
         
         chosen_topics = {}
         for elem in config_model["topics"]:
@@ -147,6 +154,7 @@ def run_training():
             
             # A previously trained model should be reused
             if user_input == "y":
+                pretrained = True
                 model = load_model(Path(__file__).parents[2]/f"models/{config_model['name']}_model_{target_name}.h5")
                 with open(Path(__file__).parents[2]/f"models/{config_model['name']}_dg_param_{target_name}.json", 'r') as f:
                     parameters_dg = json.load(f)
@@ -199,7 +207,8 @@ def run_training():
                                             model=model,
                                             df=loaded_df,
                                             parameters_dg=parameters_dg,
-                                            geo=config["localisation"])
+                                            geo=config["localisation"],
+                                            pretrained=pretrained)
         
     if config["print_results_on_terminal"]:
         print(f"{config_model['days_to_predict']}-days prediction of {config['target']} for {config['localisation']}")

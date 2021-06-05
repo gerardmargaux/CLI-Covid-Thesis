@@ -20,6 +20,7 @@ from pytrends.exceptions import ResponseError
 from pytrends.request import TrendReq
 from pytrends.dailydata import get_daily_data
 import io
+import re
 import networkx as nx
 import operator
 import random
@@ -891,6 +892,41 @@ def merge_hourly_daily(list_df_hourly: List[pd.DataFrame], list_df_daily: List[p
                 df = df * 100 / df.max()
                 daily_possible = [df_daily for df_daily in daily_possible if df_daily.index.max() > df.index.max()]
     return df
+
+
+def add_transformations(dict_df: Dict[str, pd.DataFrame], list_transformations: List[str]) -> Dict[str, pd.DataFrame]:
+    """
+    add a list of transformations to an existing dataframe, leading to newly created columns
+    :param dict_df: dict of loc: dataframe of data
+    :param list_transformations: list of transformations that needs to be performed
+        each transformation must be named as "feature_{transformation}"
+        accepted transformations are
+            - pct: for percentage change of the feature
+            - log: for log change of the feature
+        invalid format are ignored
+    :return: dict of transformed dataframe, with new features added
+    """
+    accepted_transformation = {
+        'pct': pct_values,
+        'log': log_values,
+    }
+    pattern_transformation = ''
+    for transformation in accepted_transformation:
+        pattern_transformation += '|' + transformation
+    pattern_transformation = pattern_transformation[1:]
+    for feat_transformation in list_transformations:
+        search_obj = re.search(f'(.*)_({pattern_transformation})', feat_transformation)
+        if search_obj is None:
+            continue
+        try:
+            feature = search_obj.group(1)
+            transformation = search_obj.group(2)
+            for loc, df in dict_df.items():
+                vals = accepted_transformation[transformation](df[[feature]])[feat_transformation]
+                df[feat_transformation] = vals
+        except:
+            continue
+    return dict_df
 
 
 def find_min_dates_queries(list_dates: List[Tuple[datetime, datetime]], number: int) -> List[Tuple[datetime, datetime]]:

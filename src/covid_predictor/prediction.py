@@ -4,22 +4,23 @@ from covid_predictor.DataGenerator import DataGenerator
 import plotly.express as px
 import plotly.offline as offline
 import plotly.graph_objects as go
+from os import fspath
 
 
-url_world = Path(__file__).parents[2]/"data/hospi/world.csv"
-url_pop = Path(__file__).parents[2]/"data/population.txt"
-url_trends = Path(__file__).parents[2]/"data/trends/model/"
-url_hospi_belgium = Path(__file__).parents[2]/"data/hospi/be-covid-hospi.csv"
-url_department_france = Path(__file__).parents[2]/"data/france_departements.csv"
-url_hospi_france_new = Path(__file__).parents[2]/"data/hospi/fr-covid-hospi.csv"
-url_hospi_france_tot = Path(__file__).parents[2]/"data/hospi/fr-covid-hospi-total.csv"
+url_world = fspath(Path(__file__).parents[2]/"data/hospi/world.csv")
+url_pop = fspath(Path(__file__).parents[2]/"data/population.txt")
+url_trends = fspath(Path(__file__).parents[2]/"data/trends/model/")
+url_hospi_belgium = fspath(Path(__file__).parents[2]/"data/hospi/be-covid-hospi.csv")
+url_department_france = fspath(Path(__file__).parents[2]/"data/france_departements.csv")
+url_hospi_france_new = fspath(Path(__file__).parents[2]/"data/hospi/fr-covid-hospi.csv")
+url_hospi_france_tot = fspath(Path(__file__).parents[2]/"data/hospi/fr-covid-hospi-total.csv")
 
 global n_forecast_final
 global target_idx
 global predict_one_final
 
 
-def prediction(model_name, model, df, parameters_dg, geo): 
+def prediction(model_name, model, df, parameters_dg, geo, pretrained=True): 
     
     # Get parameters of the old generator
     n_samples=parameters_dg["n_samples"]
@@ -35,6 +36,10 @@ def prediction(model_name, model, df, parameters_dg, geo):
     
     predict_one_final = predict_one
     n_forecast_final = n_forecast
+    if pretrained:
+        augment_merge = 0
+    else:
+        augment_merge = 3
     
     validation_metrics = [metric_get("MeanSquaredError"), metric_get('MeanAbsoluteError'), 
                       metric_get('RootMeanSquaredError')]
@@ -56,8 +61,8 @@ def prediction(model_name, model, df, parameters_dg, geo):
         
     df_trends = create_df_trends(url_trends, list_topics, geocodes)  # Deal with augmented data
     for k in df_hospi.keys(): # Rolling average of 7 days 
-        df_hospi[k] = df_hospi[k].rolling(7, center=True).mean().dropna()
-        df_trends[k] = df_trends[k].rolling(7, center=True).mean().dropna()
+        df_hospi[k] = df_hospi[k].rolling(7, center=True, min_periods=1).mean().dropna()
+        df_trends[k] = df_trends[k].rolling(7, center=True, min_periods=1).mean().dropna()
     merged_df = {k: pd.merge(df_hospi[k], df_trends[k], left_index=True, right_index=True).dropna() for k,v in geocodes.items()}
     
     if scaler_gen == "MinMax":
@@ -69,19 +74,19 @@ def prediction(model_name, model, df, parameters_dg, geo):
         
         if europe:
             old_data_gen = DataGenerator(df, n_samples, n_forecast, target, scaler_generator=scaler_generator,
-                        augment_merge=3, augment_adjacency=european_adjacency, augment_population=augment_population,
+                        augment_merge=augment_merge, augment_adjacency=european_adjacency, augment_population=augment_population,
                         predict_one=predict_one, cumsum=cumsum, data_columns=None)
             
             new_data_gen = DataGenerator(merged_df, n_samples, 0, target=None, scaler_generator=scaler_generator,
-                                augment_merge=3, augment_adjacency=european_adjacency, augment_population=augmented_pop,
+                                augment_merge=augment_merge, augment_adjacency=european_adjacency, augment_population=augmented_pop,
                                 predict_one=predict_one, cumsum=cumsum, data_columns=None)
         else:
             old_data_gen = DataGenerator(df, n_samples, n_forecast, target, scaler_generator=scaler_generator,
-                        augment_merge=3, augment_adjacency=france_region_adjacency, augment_population=augment_population,
+                        augment_merge=augment_merge, augment_adjacency=france_region_adjacency, augment_population=augment_population,
                         predict_one=predict_one, cumsum=cumsum, data_columns=None)
             
             new_data_gen = DataGenerator(merged_df, n_samples, 0, target=None, scaler_generator=scaler_generator,
-                                augment_merge=3, augment_adjacency=france_region_adjacency, augment_population=augmented_pop,
+                                augment_merge=augment_merge, augment_adjacency=france_region_adjacency, augment_population=augmented_pop,
                                 predict_one=predict_one, cumsum=cumsum, data_columns=None)
         
         test_idx = [new_data_gen.batch_size-1]
@@ -107,19 +112,19 @@ def prediction(model_name, model, df, parameters_dg, geo):
 
         if europe:
             old_data_gen = DataGenerator(df, n_samples, n_forecast, target, scaler_generator=scaler_generator,
-                        augment_merge=3, augment_adjacency=european_adjacency, augment_population=augment_population,
+                        augment_merge=augment_merge, augment_adjacency=european_adjacency, augment_population=augment_population,
                         predict_one=predict_one, cumsum=cumsum, data_columns=list_hosp_features)
             
             new_data_gen = DataGenerator(merged_df, n_samples, n_forecast, target, scaler_generator=scaler_generator, scaler_type='batch',
-                                augment_merge=3, augment_adjacency=european_adjacency, augment_population=augment_population,
+                                augment_merge=augment_merge, augment_adjacency=european_adjacency, augment_population=augment_population,
                                 predict_one=predict_one, cumsum=cumsum, data_columns=list_hosp_features)
         else:
             old_data_gen = DataGenerator(df, n_samples, n_forecast, target, scaler_generator=scaler_generator,
-                        augment_merge=3, augment_adjacency=france_region_adjacency, augment_population=augment_population,
+                        augment_merge=augment_merge, augment_adjacency=france_region_adjacency, augment_population=augment_population,
                         predict_one=predict_one, cumsum=cumsum, data_columns=list_hosp_features)
             
             new_data_gen = DataGenerator(merged_df, n_samples, n_forecast, target, scaler_generator=scaler_generator, scaler_type='batch',
-                                augment_merge=3, augment_adjacency=france_region_adjacency, augment_population=augment_population,
+                                augment_merge=augment_merge, augment_adjacency=france_region_adjacency, augment_population=augment_population,
                                 predict_one=predict_one, cumsum=cumsum, data_columns=list_hosp_features)
             
         max_train = old_data_gen.batch_size
@@ -220,6 +225,9 @@ def prediction_reference(model, n_samples, n_forecast, target, geo, europe=False
         df_hospi = hospi_french_region_and_be(url_hospi_france_tot, url_hospi_france_new, url_hospi_belgium, 
                                             url_department_france, french_region_and_be, new_hosp=True, 
                                             tot_hosp=True, date_begin=date_begin)
+    
+    for k in df_hospi.keys(): # Rolling average of 7 days 
+        df_hospi[k] = df_hospi[k].rolling(7, center=True, min_periods=1).mean().dropna()
     
     # Modiffication of the hospi format
     final_hospi = df_hospi[geo].reset_index()

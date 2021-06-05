@@ -1,7 +1,7 @@
 from covid_predictor.utils import *
 
 class DataGenerator:
-    
+
     def __init__(self,
                  df: Dict[str, pd.DataFrame],
                  n_samples: int,
@@ -21,7 +21,7 @@ class DataGenerator:
         """
         initialize a data generator. Takes a dict of {loc: dataframe} and use it to yield values suitable for training
         the data generator can augment the data by mixing regions together
-        the values are padded so that each region contains the same number of datapoints
+        the values are padded so that each region contains the same number of datapoints. Only the right padding information is stored
 
         :param df: dataframe of values to use in order to generate X and Y. Must be double indexed by loc and date
         :param n_samples: number of timesteps in X
@@ -31,11 +31,11 @@ class DataGenerator:
         :param scaler_type: one of "batch", "window", "whole"
         :param no_scaling: list of features that must not be scaled
         :param cumsum: if True, accumulates Y using cumsum
-        :param predict_one: if True, the target is Y at time n_forecast. Otherwhise, the target is Y in [t+1 ... t+n_forecast]
+        :param predict_one: if True, the target is Y at time n_forecast. Otherwise, the target is Y in [t+1 ... t+n_forecast]
         :param augment_merge: number of regions to merge in order to augment the data. If <=1, no data augmentation is performed
         :param augment_adjacency: use the list of adjacent region to augment the data. If None, all regions
             will be mixed, even unadjacent
-        :param augment_population: population of each region. Must not be None if augment_feature_pop contains value
+        :param augment_population: population of each region. Must not be None if augment_feature_pop contains values
         :param augment_feature_pop: list of features that should be weighted according to the population
         :param no_lag: if True, the dataframe will be considered as having the right format for training and add_lag
             will not be called on it
@@ -57,8 +57,14 @@ class DataGenerator:
             self.n_features = len(data_columns)
         if target in data_columns:
             self.target_idx = data_columns.index(target)
+            # TODO use option with cumsum
+            if not cumsum:
+                self.target_in_x = True
+            else:
+                self.target_in_x = False
         else:
             self.target_idx = None  # the target is not in the data columns, no need to specify it
+            self.target_in_x = False
 
         # handle data generator without target
         self.no_target = target == '' or n_forecast == 0  # no target specified
@@ -78,24 +84,26 @@ class DataGenerator:
         for k in df:
             if smallest_dates[k] > min_date:  # missing data at the beginning
                 date_range = pd.date_range(min_date, smallest_dates[k] - timedelta(days=1))
-                loc_padded_idx = np.array(range(len(date_range)))
+                # loc_padded_idx = np.array(range(len(date_range)))
                 nb_point = len(date_range)
                 zeros = np.zeros(nb_point)
                 pad_before = pd.DataFrame({**{'DATE': date_range, 'LOC': [k for _ in range(nb_point)]},
                                            **{col: zeros for col in init_columns}}).set_index(["LOC", "DATE"])
                 df[k] = pad_before.append(df[k])
             else:
-                loc_padded_idx = np.array([])
+                pass
+                # loc_padded_idx = np.array([])
             if highest_dates[k] < max_date:  # missing data at the end
                 date_range = pd.date_range(highest_dates[k] + timedelta(days=1), max_date)
-                loc_padded_idx = np.append(loc_padded_idx, range(len(df[k]), len(df[k]) + len(date_range)))
+                #loc_padded_idx = np.append(loc_padded_idx, range(len(df[k]), len(df[k]) + len(date_range)))
+                loc_padded_idx = np.arange(len(df[k]), len(df[k]) + len(date_range))
                 nb_point = len(date_range)
                 zeros = np.zeros(nb_point)
                 pad_after = pd.DataFrame({**{'DATE': date_range, 'LOC': [k for _ in range(nb_point)]},
                                           **{col: zeros for col in init_columns}}).set_index(["LOC", "DATE"])
                 df[k] = df[k].append(pad_after)
             else:
-                pass
+                loc_padded_idx = np.array([])
             self.padded_idx[k] = loc_padded_idx
 
         # augment the data
@@ -106,6 +114,8 @@ class DataGenerator:
                 augment_feature_no_pop = init_columns
             else:
                 augment_feature_no_pop = [col for col in init_columns if col not in augment_feature_pop]
+                # filter to only take the columns already present in the dataframe
+                augment_feature_pop = [i for i in augment_feature_pop if i in init_columns]
             for region_list in region_merge_iterator([loc for loc in df], augment_merge, augment_adjacency):
                 region_code = '-'.join(sorted(set(region_list)))
                 df[region_code] = sum(
@@ -127,6 +137,9 @@ class DataGenerator:
                                                               self.padded_idx[region_list[1]])
                 else:
                     self.padded_idx[region_code] = reduce(np.union1d, ([self.padded_idx[k] for k in region_list]))
+        # add data transformation
+        add_transformations(df, data_columns)
+
         self.loc_all = {**self.loc_init, **self.loc_augmented}
         self.df_init = df  # contains the augmented data with padding and without lagged values
         self.padded_idx_init = deepcopy(self.padded_idx)  # padded indexes before the add lag
@@ -145,19 +158,19 @@ class DataGenerator:
         # add lagged values
         if no_lag:  # the dataframe has already the right format
             self.df = df
-            self.date_range = pd.date_range(min_date, max_date)
+            self.date_range = pd.date_range(min_date, max_date).to_pydatetime()
             days_removed = 0  # no day as been removed
         else:  # the dataframe must be constructed across time
             if self.no_target:  # no target specified
                 self.df = {k: add_lag(v, - n_samples) for k, v in df.items()}
                 self.date_range = pd.date_range(min_date + timedelta(days=(n_samples - 1)),
-                                                max_date)
+                                                max_date).to_pydatetime()
                 days_removed = n_samples - 1
             else:  # a target exist
                 self.df = {k: add_lag(v, - n_samples).join(add_lag(v[[target]], n_forecast),
                                                            how='inner') for k, v in df.items()}
                 self.date_range = pd.date_range(min_date + timedelta(days=(n_samples - 1)),
-                                                max_date - timedelta(days=n_forecast))
+                                                max_date - timedelta(days=n_forecast)).to_pydatetime()
                 days_removed = n_forecast + n_samples - 1
         self.padded_idx = {k: (v - days_removed).astype(int) for k, v in self.padded_idx.items()}
 
@@ -296,8 +309,18 @@ class DataGenerator:
                     # transform each feature
                     for feature_idx in self.to_scale:
                         if not use_previous_scaler:
+                            if self.target_in_x and feature_idx == self.target_idx:
+                                # need to add the values of y as well for the scaling
+                                y_val = self.Y[self.idx[loc], :]
+                                if self.scaler_type == "whole":
+                                    y_val = y_val[-1, :]
+                                else:
+                                    y_val = y_val[idx[-1], :]
+                            else:
+                                y_val = []
                             old = val[:, -1, feature_idx].reshape(-1)  # get the values at t=0 on each window
                             new = val[0, :-1, feature_idx].reshape(-1)  # add the oldest values in the first window
+                            new = np.append(new, y_val)
                             self.scaler_x[loc][feature_idx].fit(np.append(old, new).reshape((-1, 1)))  # fit the scaler
                         for t in range(self.n_samples):  # apply the transformation on the feature across time
                             val[:, t, feature_idx] = self.scaler_x[loc][feature_idx].transform(
@@ -359,7 +382,17 @@ class DataGenerator:
                             if repeated_values or self.cumsum:
                                 self.scaler_y[loc].fit(val.reshape((-1, 1)))  # fit the scaler
                             else:
+                                if self.target_in_x:
+                                    # need to add the values stored in x
+                                    x_val = self.X[self.idx[loc], :, self.target_idx]
+                                    if self.scaler_type == "whole":
+                                        x_val = x_val[0, :]
+                                    else:
+                                        x_val = x_val[idx[0], :]
+                                else:
+                                    x_val = []
                                 old = val[:, 0]  # get the values at t+1
+                                old = np.append(old, x_val)
                                 new = val[-1, 1:]  # add the most recent values at t+2 ... t+n_forecast
                                 self.scaler_y[loc].fit(np.append(old, new).reshape((-1, 1)))  # fit the scaler
                         for t in range(val.shape[
@@ -382,7 +415,7 @@ class DataGenerator:
         return np.concatenate(Y)
 
     def inverse_transform_y(self, unscaled: np.array, geo: Union[str, Dict[str, str]] = None, idx: np.array = None,
-                            return_type: str = 'array', inverse_tranform: bool = True) -> Union[
+                            return_type: str = 'array', inverse_transform: bool = True) -> Union[
         np.array, Dict[str, pd.DataFrame], Dict[str, np.array]]:
         """
         inverse transform the values provided, in order to get unscaled data
@@ -395,17 +428,17 @@ class DataGenerator:
             - array: return a 2D np.array of values
             - dict_array: return a dict of {loc: np.array}
             - dict_df: return a dict of {loc: pd.DataFrame}
-        :param inverse_tranform: don't use any inverse tranform
+        :param inverse_transform: don't use any inverse transform
         """
         if geo is None:
             geo = self.idx  # only the keys are needed
         elif isinstance(geo, str):
             geo = {geo: self.idx[geo]}
         if idx is None or self.scaler_type != "batch":  # the scaler_type must be 'whole' or 'window'
-            idx_date = self.relative_idx
             idx = self.relative_idx
+            idx_dates = np.array(idx)
         else:
-            idx_date = np.array(idx)
+            idx_dates = np.array(idx)
             idx = np.array(range(len(idx)))
 
         val = np.zeros(unscaled.shape)
@@ -416,14 +449,14 @@ class DataGenerator:
             for loc in geo:
                 loc_idx = idx + offset
                 init_shape = unscaled[loc_idx, :].shape
-                if inverse_tranform:
+                if inverse_transform:
                     val[loc_idx, :] = self.scaler_y[loc].inverse_transform(unscaled[loc_idx, :].reshape((-1, 1))).reshape(
                         init_shape)
                 else:
                     val[loc_idx, :] = unscaled[loc_idx, :]
                 offset += batch_size  # increment the offset to get the values from the next batch
                 if return_type == 'dict_df':
-                    dates_used = self.date_range[idx_date]
+                    dates_used = self.date_range[idx_dates]
                     multi_index = pd.MultiIndex.from_product([[loc], dates_used], names=['LOC', 'DATE'])
                     return_df[loc] = pd.DataFrame(val[loc_idx, :], columns=self.target_columns).set_index(
                         multi_index)
@@ -432,7 +465,7 @@ class DataGenerator:
         elif self.scaler_type == "window":
             offset = 0  # current offset in the Y tensor
             batch_size = len(idx)
-            if inverse_tranform:
+            if inverse_transform:
                 for loc in geo:
                     for j, i in enumerate(idx):  # TODO implement inverse transform for window and corresponding return type
                         val[i + offset, :] = self.scaler_y[loc][i].inverse_transform(
@@ -508,11 +541,11 @@ class DataGenerator:
     def __str__(self):
         """
         contains informations about
-        - n_samples, n_forecast
-        - data columns
-        - target
-        - scaling done
-        - number of init and augmented regions, as well as their name
+            - n_samples, n_forecast
+            - data columns
+            - target
+            - scaling done
+            - number of init and augmented regions, as well as their name
         """
         info = f'n_samples = {self.n_samples}, n_forecast = {self.n_forecast}\n'
         info += f'data = {self.data_columns_t0}\n'
@@ -522,3 +555,99 @@ class DataGenerator:
         list_regions = [loc for loc in self.df]
         info += f'regions = {list_regions}'
         return info
+
+    def time_idx(self, freq='M', format_date=False, boundary='inner') -> List[Tuple[np.array, Union[datetime, str]]]:
+        """
+        give the indexes corresponding to time interval
+
+        :param freq: frequency for the time interval. supported:
+            - 'M': monthly data
+            - 'W': weekly data
+            - 'D': daily data
+        :param format_date: If True, transform the datetime into str, based on the frequency
+        :param boundary: tell how to proceed for boundary: dates with values overlapping on multiple interval. supported:
+            - 'inner': indices are split on dates where the n_forecast targets are in the next interval
+            - 'outer': indices are split on dates where the target at t+n_forecast is in the next interval
+            ex. with n_forecast = 2, freq='M':
+                t       t+1   t+2
+                29/01 | 30/01 31/01
+                 -----------------     outer split
+                30/01 | 31/01 01/02
+                 -----------------     inner split
+                31/01 | 01/02 02/02
+        :return: tuples of (datetime, array of indices)
+        """
+        def round_dates(x: Tuple[int, datetime]) -> Tuple[int, datetime]:
+            if boundary == 'inner':
+                date_boundary = x[1] + timedelta(days=1)
+            elif boundary == 'outer':
+                date_boundary = x[1] + timedelta(days=self.n_forecast)
+            else:
+                raise ValueError(f'boundary is not a valid value. Found: {boundary}')
+
+            if freq == 'M':
+                begin_month = date_boundary.replace(microsecond=0, second=0, minute=0, hour=0, day=1)
+                rounded = x[0], begin_month
+            elif freq == 'W':
+                rounded = x[0], date_boundary - timedelta(days=date_boundary.weekday())
+            elif freq == 'D':
+                rounded = x
+            else:
+                raise ValueError(f'freq is not a valid value. Found: {freq}')
+            return rounded
+
+        def aggregate_dates(x, y) -> List[List[Union[List[int], datetime]]]:
+            if isinstance(x, tuple):
+                x = [[[x[0]], x[1]]]
+            if x[-1][1] == y[1]:
+                x[-1][0].append(y[0])
+            else:
+                x.append([[y[0]], y[1]])
+            return x
+
+        def to_np_array(x):
+            for i in range(len(x)):
+                x[i][0] = np.array(x[i][0])
+                if format_date:
+                    x[i][1] = datetime_to_str(x[i][1], freq)
+            return x
+
+        return to_np_array(reduce(aggregate_dates, map(round_dates, [(i, j) for i, j in enumerate(self.date_range)])))
+
+    def walk_iterator(self, nb_test, periods_train=0, periods_eval=1, periods_test=1,
+                      shift_test:int = 1, freq='M', boundary='inner'):
+        """
+        iterate over indexes, giving a split for training, evaluation and test set
+        :param nb_test: total number of periods that must be evaluated in the test set
+        :param periods_train: number of periods to use in training set. 0 = use all periods at each iteration
+        :param periods_eval: number of periods to use in evaluation set
+        :param periods_test: number of test periods included at each iteration. Default = 1 period per test set
+        :param freq: frequency of the split
+        :param boundary: tell how to proceed for boundary: dates with values overlapping on multiple interval. cf time_idx
+            for details
+        :return:
+        """
+        time_idx = self.time_idx(freq, format_date=True, boundary=boundary)
+        nb_periods = len(time_idx)
+        idx_test = max(nb_periods - nb_test * shift_test - periods_test + 1, periods_eval + periods_train)
+        while idx_test + periods_test <= nb_periods:
+            test_set = time_idx[idx_test:idx_test+periods_test]
+            valid_set = time_idx[idx_test - periods_eval:idx_test]
+            if periods_train == 0:
+                training_set = time_idx[:idx_test - periods_eval]
+            else:
+                training_set = time_idx[idx_test - periods_eval - periods_train:idx_test - periods_eval]
+
+            sets = [[training_set, periods_train], [valid_set, periods_eval], [test_set, periods_test]]
+            for i in range(3):
+                if sets[i][0]:
+                    set_array = np.concatenate([sets[i][0][j][0] for j in range(len(sets[i][0]))])
+                    if sets[i][1] > 1 or (i == 0 and sets[i][1] == 0):
+                        sets[i] = set_array, f'{sets[i][0][0][1]} - {sets[i][0][-1][1]}'
+                    else:
+                        sets[i] = set_array, sets[i][0][-1][1]
+                else:
+                    sets[i] = [np.array([]), '']
+
+            yield sets[0], sets[1], sets[2]
+            idx_test += shift_test

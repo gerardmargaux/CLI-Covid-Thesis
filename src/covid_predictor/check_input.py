@@ -15,6 +15,7 @@ class TargetEnum(Enum):
 class CollectionEnum(Enum):
     daily = "daily" 
     hourly = "hourly" 
+    minimal = "minimal"
     
 
 class ModelTrainableEnum(Enum):
@@ -54,8 +55,8 @@ class CheckTrainable(BaseModel):
     type_name: TypeModelEnum
     name: ModelTrainableEnum
     date_begin: date
-    days_to_use: conint(gt=0, lt=40)
-    days_to_predict: conint(gt=0, lt=25)
+    days_to_use: conint(gt=0, lt=200)
+    days_to_predict: conint(gt=0, lt=200)
     epochs: conint(gt=200, lt=10000)
     topics: List[str]
     scaler: ScalerEnum
@@ -63,11 +64,11 @@ class CheckTrainable(BaseModel):
     cumsum: bool
     verbose: bool 
        
-    @root_validator()
+    """@root_validator()
     def check_days(cls, values):
         if values.get("days_to_use") < values.get("days_to_predict"):
             raise ValueError('The number of days to use should be greater or equal to the number of days to predict')
-        return values
+        return values"""
     
 
 class CheckUntrainable(BaseModel):

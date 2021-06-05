@@ -5,7 +5,7 @@ src/covid_predictor/DataGenerator.py
 src/covid_predictor/__init__.py
 src/covid_predictor/check_input.py
 src/covid_predictor/cli.py
-src/covid_predictor/collection.py
+src/covid_predictor/data_collection.py
 src/covid_predictor/prediction.py
 src/covid_predictor/training.py
 src/covid_predictor/utils.py
