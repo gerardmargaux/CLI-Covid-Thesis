@@ -41,7 +41,7 @@ You will find several parameters that can be changed in the _config.json_ file b
 
 * **name** : In this case, the name of the task can be _collection_ or _collect_.
 
-* **collection** : Refers to the type of collection that should be done. Can be _hourly_ to collect Trends data hour-by-hour or _daily_ to collect data day-by-day.
+* **collection** : Refers to the type of collection that should be done. Can be _hourly_ to collect Trends data on an hour-by-hour basis, _daily_ to collect data on a day-by-day basis or _minimal_ to do a minimal data collection.
 
 * **topics** : List of topics that will be used to collect data. 
 
@@ -69,7 +69,7 @@ To make a prediction of the number of hospitalizations in a certain region, seve
 
 * **days_to_use** :  This represents the number of days that should be used by the model to make the prediction.
 
-* **days_to_predict** :  This parameter is used to determine the number of days that should be predicted by the model. The number of days to use for the prediction should always be greater or equal to the number of days that we want to predict.
+* **days_to_predict** :  This parameter is used to determine the number of days that should be predicted by the model. We recommend using a number of days to be predicted that is smaller than or equal to the number of days that were used.
 
 * **date_begin** : This defines the date from which the model should start training. Usually this is set to 2020-02-01 because that is when the coronavirus started to arrive in Belgium.
 
