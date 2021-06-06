@@ -57,7 +57,7 @@ class CheckTrainable(BaseModel):
     date_begin: date
     days_to_use: conint(gt=0, lt=200)
     days_to_predict: conint(gt=0, lt=200)
-    epochs: conint(gt=200, lt=10000)
+    epochs: conint(gt=999, lt=10000)
     topics: List[str]
     scaler: ScalerEnum
     predict_one: bool

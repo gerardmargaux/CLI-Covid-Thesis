@@ -22,26 +22,26 @@ cd path/to/repository
 
 ```
 
-4. Install the package
+4. Install the packages
 ```
 pip install -e .
 ```
 
 5. Use it
 ```
-covid-predictor predict
 covid-predictor collect
+covid-predictor run
 ```
 
 ## How to use it ? 
 
-You will find several parameters that can be changed in the _config.json_ file before running the code. These parameters are the following : 
+You will find several parameters that can be changed in the _config.json_ file before running the code. Note that it is advisable to always run a final data collection before running the prediction model. These parameters are the following: 
 
 ### Collection of data : 
 
 * **name** : In this case, the name of the task can be _collection_ or _collect_.
 
-* **collection** : Refers to the type of collection that should be done. Can be _hourly_ to collect Trends data on an hour-by-hour basis, _daily_ to collect data on a day-by-day basis or _minimal_ to do a minimal data collection.
+* **collection** : Refers to the type of collection that should be done. Can be _hourly_ to collect Trends data on an hour-by-hour basis, _daily_ to collect data on a day-by-day basis or _minimal_ to do a minimal data collection. It is advisable to do minimal data collection. 
 
 * **topics** : List of topics that will be used to collect data. 
 
@@ -73,7 +73,7 @@ To make a prediction of the number of hospitalizations in a certain region, seve
 
 * **date_begin** : This defines the date from which the model should start training. Usually this is set to 2020-02-01 because that is when the coronavirus started to arrive in Belgium.
 
-* **epochs** :  This is the number of epochs that the model should do during the training process.
+* **epochs** :  This is the number of epochs that the model should do during the training process. It is necessary to provide a number of epochs higher than 1000 to hope to obtain a correct result. We recommend using between 3000 and 5000 epochs. However, the training may be very slow for an encoder-decoder model. 
 
 * **topics** : This represents the list of topics that should be considered by the model during the training. These topics must have been collected previously before being able to use it in the prediction.
 

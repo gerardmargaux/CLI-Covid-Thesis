@@ -211,7 +211,7 @@ european_population = {
 }
 
 
-def log_values(df: pd.DataFrame, columns: list = None, base: int = 10, inf_value='drop') -> pd.DataFrame:
+def log_values(df: pd.DataFrame, columns: list = None, base: int = 10, inf_value=0) -> pd.DataFrame:
     """
     add log values to the dataframe
     :param df: dataframe to change
@@ -236,7 +236,7 @@ def log_values(df: pd.DataFrame, columns: list = None, base: int = 10, inf_value
     return df
 
 
-def pct_values(df: pd.DataFrame, columns: list = None, add_one: bool = False) -> pd.DataFrame:
+def pct_values(df: pd.DataFrame, columns: list = None, add_one: bool = False, threshold=0.5) -> pd.DataFrame:
     """
     add percentage values to the dataframe
     :param df: dataframe to change
@@ -251,19 +251,6 @@ def pct_values(df: pd.DataFrame, columns: list = None, add_one: bool = False) ->
     if add_one:
         df[new_columns] = df[new_columns] + 1
     return df
-
-
-def get_world_population(pop_file: str, alpha2: bool = True) -> Dict[str, float]:
-    """
-    :param pop_file: path to the population file, registered as a dict
-    :param alpha2: whether to return the dict with the keys being alpha 2 coded or not
-    :return dict of population
-    """
-    pop = json.load(open(pop_file))
-    if alpha2:
-        return {alpha3_to_alpha2(k): v for k, v in pop.items() if len(k) == 3}
-    else:
-        return pop
 
 
 def hospi_french_region_and_be(hospi_france_tot, hospi_france_new, hospi_belgium, department_france, geo,

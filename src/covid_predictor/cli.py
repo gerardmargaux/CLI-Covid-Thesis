@@ -74,17 +74,17 @@ def run_collection():
     else:
         geocodes = european_geocodes
     
-    # Collection of data  
+    # Collection of data with 3 different methods
     if config["collection"] == "hourly": # Hourly data collection
         collect_data("hourly", chosen_topics, geocodes)
         collect_data("gap", chosen_topics, geocodes)
         generate_model_data('hourly', chosen_topics, geocodes)
-        #actualize_trends(french_region_and_be, chosen_topics, plot=False, only_hourly=False, refresh_daily=True)
+        
     elif config["collection"] == "minimal": # Minimal data collection
         collect_data("minimal", chosen_topics, geocodes)
         collect_data("gap", chosen_topics, geocodes)
         generate_model_data('minimal', chosen_topics, geocodes)
-        #actualize_trends_using_daily(french_region_and_be, chosen_topics, plot=False, refresh=True)
+        
     else:
         collect_data("daily", chosen_topics, geocodes)
         generate_model_data('daily', chosen_topics, geocodes)
@@ -215,7 +215,7 @@ def run_training():
         print(final_pred)
         
     if config["plot"]:
-        plot_prediction(final_pred, final_hospi, geo=config["localisation"])
+        plot_prediction(final_pred, final_hospi, geo=config["localisation"], target=config["target"])
     
 
 if __name__=="__main__":

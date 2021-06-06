@@ -12,6 +12,7 @@ from tensorflow.keras.layers import Flatten, Dense, Reshape, TimeDistributed, LS
 from tensorflow.keras import regularizers
 from tensorflow.keras.callbacks import Callback, EarlyStopping, ProgbarLogger, History
 from tensorflow.keras.metrics import get as metric_get
+import tensorflow.keras.backend as K
 import itertools
 import functools
 import pickle
@@ -64,7 +65,7 @@ class LinearRegressionHospi(tf.keras.Model):
     """
     repeat the last hospitalisations given as input n_forecast time
     """
-    def __init__(self, window_size, *args, **kwargs):
+    def __init__(self, window_size=29, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.window_size = window_size
         
@@ -141,7 +142,7 @@ def get_assemble(batch_input_shape):
     return model
     
         
-def get_custom_linear_regression(window_size, *args, **kwargs):
+def get_custom_linear_regression(window_size=29, *args, **kwargs):
     model = LinearRegressionHospi(window_size)
     model.compile(loss=tf.losses.MeanSquaredError(),
                       metrics=['mse', 'mae', tf.keras.metrics.RootMeanSquaredError()])
@@ -156,18 +157,21 @@ def get_baseline(*args, **kwargs):
 
 
 def get_encoder_decoder(batch_input_shape, n_forecast, predict_one=False):
+    reg = lambda x: None
+    regw = 0.0005
     model = Sequential()
-    model.add(LSTM(16, return_sequences=True, stateful=False, batch_input_shape=batch_input_shape, recurrent_dropout=0))
-    model.add(LSTM(4, return_sequences=False, stateful=False))
+    model.add(LSTM(16, return_sequences=True, stateful=False, 
+                   batch_input_shape=batch_input_shape, kernel_regularizer=reg(regw)))
+    model.add(LSTM(4, return_sequences=False, stateful=False, kernel_regularizer=reg(regw)))
     model.add(RepeatVector(n_forecast))  # repeat
-    model.add(LSTM(4, return_sequences=True, stateful=False))  # dec
+    model.add(LSTM(4, return_sequences=True, stateful=False, kernel_regularizer=reg(regw)))  # dec
     if not predict_one:
-        model.add(LSTM(16, return_sequences=True, stateful=False))  # dec
-        model.add(TimeDistributed(Dense(1)))
+        model.add(LSTM(16, return_sequences=True, stateful=False, kernel_regularizer=reg(regw)))  # dec
+        model.add(TimeDistributed(Dense(1, kernel_regularizer=reg(regw), activation='elu')))
         model.add(Reshape((n_forecast,)))
     else:
-        model.add(LSTM(16, return_sequences=False, stateful=False))  # dec
-        model.add(Dense(1))
+        model.add(LSTM(16, return_sequences=False, stateful=False, kernel_regularizer=reg(regw)))  # dec
+        model.add(Dense(1, kernel_regularizer=reg(regw), activation='elu'))
         model.add(Reshape((1,)))
         
     def custom_loss_function(y_true, y_pred):
@@ -177,6 +181,7 @@ def get_encoder_decoder(batch_input_shape, n_forecast, predict_one=False):
         return tf.keras.losses.mean_squared_error(y_true, y_pred)
     
     model.compile(loss=custom_loss_function, optimizer='adam', metrics=['mse', 'mae', tf.keras.metrics.RootMeanSquaredError()])
+    K.set_value(model.optimizer.learning_rate, 0.01)
     return model
 
 
@@ -189,7 +194,7 @@ def get_simple_autoencoder(batch_input_shape, n_forecast, target_idx):
     return model
 
 
-def get_dense_model(batch_input_shape, n_samples, n_forecast, target_idx, use_lambda=False):
+def get_dense_model(batch_input_shape, n_samples, n_forecast, target_idx, use_lambda=True):
     model = Sequential()
     if use_lambda:
         model.add(Lambda(lambda x: x[:,:,target_idx], batch_input_shape=batch_input_shape))  # select only the target of the previous days
@@ -233,8 +238,8 @@ def train_model(type_model, epochs, n_samples, n_forecast, target, date_begin, l
         
     df_trends = create_df_trends(url_trends, list_topics, geocodes)  # Deal with augmented data
     for k in df_hospi.keys(): # Rolling average of 7 days 
-        df_hospi[k] = df_hospi[k].rolling(7, center=True).mean().dropna()
-        df_trends[k] = df_trends[k].rolling(7, center=True).mean().dropna()
+        df_hospi[k] = df_hospi[k].rolling(7, center=True, min_periods=1).mean().dropna()
+        df_trends[k] = df_trends[k].rolling(7, center=True, min_periods=1).mean().dropna()
     merged_df = {k: pd.merge(df_hospi[k], df_trends[k], left_index=True, right_index=True).dropna() for k,v in geocodes.items()}
     
     pickle.dump(merged_df, open(f"./models/{type_model}_merged_df_{target}.p", "wb" ))
@@ -299,8 +304,8 @@ def train_model(type_model, epochs, n_samples, n_forecast, target, date_begin, l
         list_hosp_features = [
             'NEW_HOSP',
             'TOT_HOSP',
-            #'TOT_HOSP_log',
-            #'TOT_HOSP_pct',
+            'TOT_HOSP_log',
+            'TOT_HOSP_pct',
         ]
 
         if europe:
@@ -324,12 +329,12 @@ def train_model(type_model, epochs, n_samples, n_forecast, target, date_begin, l
         batch_size_train = len(X_train_1)
 
         # First prediction based only on the hospitalizations
-        model = model_generator(n_forecast=n_forecast, target_idx=target_idx, batch_input_shape=(batch_size_train, n_samples, old_data_gen.n_features))
+        model = model_generator(n_forecast=n_forecast, target_idx=target_idx, batch_input_shape=(batch_size_train, n_samples, dg.n_features))
         Y_train_pred_1 = model.predict(X_train_1)
         df_train_predicted_1 = dg.inverse_transform_y(Y_train_pred_1, idx=train_idx, return_type='dict_df', 
-                                                inverse_tranform=False)
+                                                inverse_transform=False)
         df_train_1 = dg.inverse_transform_y(Y_train, idx=train_idx, return_type='dict_df',
-                                                inverse_tranform=False)  
+                                                inverse_transform=False)  
         
         data_dg_c = [f'{topic}(t{i})' for i in range(-n_samples+1, 0, 1) for topic in list_topics] + [topic for topic in list_topics]
         target_df_c = [f'C(t+{i})' for i in range(1, n_forecast+1)]

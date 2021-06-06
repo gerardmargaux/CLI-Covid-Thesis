@@ -3,7 +3,7 @@
     "task": [
         {
             "name": "collection",
-            "collection": "hourly",
+            "collection": "minimal",
             "topics": ["Fièvre", "Coronavirus disease 2019", "Vaccination"], 
             "european_geo": false
         }, 
@@ -21,9 +21,9 @@
                     "type_name": "trainable",
                     "name": "dense", 
                     "days_to_use": 30,
-                    "days_to_predict": 40,
+                    "days_to_predict": 25,
                     "date_begin": "2020-02-01",
-                    "epochs": 3500, 
+                    "epochs": 3000, 
                     "topics": ["Fièvre", "Coronavirus disease 2019", "Vaccination"],
                     "scaler": "MinMax",
                     "predict_one": false,

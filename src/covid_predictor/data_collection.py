@@ -2251,13 +2251,13 @@ def collect_data(method: str = 'daily', topics: Dict[str, str] = None, geo: Dict
         end = DailyQueryBatch.latest_day_available()
         query_list = DailyQueryList(topics, geo, trends_request, begin, end, number=10, savefile=True)
     elif method == 'hourly':
-        end = datetime.strptime('2021-05-31T23', hour_format)
+        end = HourlyQueryBatch.latest_day_available()
         query_list = HourlyQueryList(topics, geo, trends_request, begin, end, number=1, savefile=True)
     elif method == 'minimal':
         end = HourlyQueryBatch.latest_day_available()
         query_list = MinimalQueryList(topics, geo, trends_request, begin, end, savefile=True)
     elif method == 'gap':
-        end = datetime.strptime('2021-05-31', day_format)
+        end = DailyQueryBatch.latest_day_available()
         query_list = DailyGapQueryList(topics, geo, trends_request, begin, end, number=10, savefile=True, shuffle=False)
     trends_request = run_collect(trends_request, query_list)
 

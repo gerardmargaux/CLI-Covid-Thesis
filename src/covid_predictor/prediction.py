@@ -106,8 +106,8 @@ def prediction(model_name, model, df, parameters_dg, geo, pretrained=True):
         list_hosp_features = [
             'NEW_HOSP',
             'TOT_HOSP',
-            #'TOT_HOSP_log',
-            #'TOT_HOSP_pct',
+            'TOT_HOSP_log',
+            'TOT_HOSP_pct',
         ]
 
         if europe:
@@ -146,11 +146,11 @@ def prediction(model_name, model, df, parameters_dg, geo, pretrained=True):
         Y_test_pred_1 = first_model.predict(X_test_1)
         Y_train_pred_1 = first_model.predict(X_train_1)
         df_train_predicted_1 = old_data_gen.inverse_transform_y(Y_train_pred_1, idx=train_idx, return_type='dict_df', 
-                                        inverse_tranform=False)
+                                        inverse_transform=False)
         df_test_predicted_1 = new_data_gen.inverse_transform_y(Y_test_pred_1, idx=test_idx, return_type='dict_df', 
-                                                geo=new_data_gen.loc_init, inverse_tranform=False)
+                                                geo=new_data_gen.loc_init, inverse_transform=False)
         df_train_1 = old_data_gen.inverse_transform_y(Y_train, idx=train_idx, return_type='dict_df',
-                                                inverse_tranform=False)
+                                                inverse_transform=False)
         
         data_dg_c = [f'{topic}(t{i})' for i in range(-n_samples+1, 0, 1) for topic in list_topics] + [topic for topic in list_topics]
         target_df_c = [f'C(t+{i})' for i in range(1, n_forecast+1)]
@@ -176,6 +176,12 @@ def prediction(model_name, model, df, parameters_dg, geo, pretrained=True):
                           data_columns=[k for k in list_topics], no_lag=True)
         dg_2_new.set_loc_init(new_data_gen.loc_init)  # consider the other localisations as being augmented
             
+        print("test_idx", test_idx)
+        print("batch size old dg", old_data_gen.batch_size)
+        print("batch size new dg", new_data_gen.batch_size)
+        print("batch size old dg2", dg_2.batch_size)
+        print("batch size new dg2", dg_2_new.batch_size)
+        
         X_train_2 = dg_2.get_x(scaled=True)
         C_train = dg_2.get_y(scaled=False)
         
@@ -184,7 +190,7 @@ def prediction(model_name, model, df, parameters_dg, geo, pretrained=True):
         batch_size_test = len(X_test_2)
         
         C_test_pred_2 = model.predict(X_test_2, batch_size=batch_size_test)
-        df_test_c_predicted = dg_2_new.inverse_transform_y(C_test_pred_2, idx=test_idx, return_type='dict_df', inverse_tranform=False, geo=dg_2_new.loc_init)
+        df_test_c_predicted = dg_2_new.inverse_transform_y(C_test_pred_2, idx=test_idx, return_type='dict_df', inverse_transform=False, geo=dg_2_new.loc_init)
         
         y_pred_real = {}
         inverse_columns = {j:i for i, j in parameters_dg["target_remaining"].items()}
@@ -256,7 +262,7 @@ def prediction_baseline(x_train, nb_test):
     return np.full(nb_test, x_train[-1])
 
 
-def plot_prediction(pred_df, hospi, geo):
+def plot_prediction(pred_df, hospi, geo, target):
     color_train = '#1f77b4'
     color_prediction = '#ff7f0e'
     steps = np.pi / 30  # steps used between 2 points
@@ -269,11 +275,11 @@ def plot_prediction(pred_df, hospi, geo):
     total_df = total_df.reset_index()
     pred_df = pred_df.reset_index()
     
-    fig = px.scatter(total_df, x="DATE", y=total_df.columns, title=f"Prediction of the number of hospitalizations in {geo}")
+    fig = px.scatter(total_df, x="DATE", y=total_df.columns, title=f"Prediction of the number of hospitalizations ({target}) in {geo}")
     fig.data[0].update(mode='markers+lines')
     fig.for_each_trace(
         lambda trace: trace.update(marker_symbol="cross") if trace.name == "Predictions" else (),
     )
-    fig.update_yaxes(title="Number of hospitalizations")
+    fig.update_yaxes(title=f"Number of hospitalizations ({target})")
     fig.update_layout(legend_title="Type of points")
     fig.show()
