@@ -95,3 +95,9 @@ To make a prediction of the number of hospitalizations in a certain region, seve
 * **days_to_predict** : This parameter is used to determine the number of days that should be predicted by the model.
 
 If you want to make the prediction with a trainable model, you do not need to specify the parameters in the _untrainable_ section in the config file and vice-versa. 
+
+The code that was used to create this tool comes from another repository that we created and can be found at the following link: [CovidThesis](https://github.com/gerardmargaux/CovidThesis)
+
+If you have any questions or remarks about this work, please do not hesitate to contact us at the following email addresses: 
+* margaux.gerard4@gmail.com
+* augustin.delecluse@hotmail.com
