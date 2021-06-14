@@ -1535,6 +1535,7 @@ class MinimalQueryList(QueryList):
         self.overlap_hourly_daily = 6  # overlap used for daily to hourly requests
         self.overlap_hourly = 15  # overlap used between 2 hourly requests
         self.part = 'daily'  # switch to 'hourly' once all daily requests have been processed
+        self.delete_hourly = set()  # list of hourly files that must be deleted
         super().__init__(topics, geo, dir_min_daily, trends_request, begin, end, DailyQuery, query_limit, overlap,
                          number, cat, gprop, savefile, shuffle)
 
@@ -1560,11 +1561,16 @@ class MinimalQueryList(QueryList):
                 if os.path.exists(filename):
                     df_hourly = pd.read_csv(filename, parse_dates=['date'], date_parser=date_parser_hourly).set_index(
                         'date')
-                    # first hourly date registered + timedelta
-                    begin_hourly = (df_hourly.index.min() - timedelta(
-                        days=(self.overlap_hourly_daily - 1))).to_pydatetime().date()
-                    begin_hourly = date_to_datetime(begin_hourly)
-                    end = min(self.end, begin_hourly)
+                    # check if the hourly data covered the last end asked. If yes, keep it. Otherwise, will be deleted
+                    if df_hourly.index.max().to_pydatetime() < self.end:  # throw away the hourly data
+                        end = self.end
+                        self.delete_hourly.add(filename)
+                    else:  # keep the hourly data
+                        # first hourly date registered + timedelta
+                        begin_hourly = (df_hourly.index.min() - timedelta(
+                            days=(self.overlap_hourly_daily - 1))).to_pydatetime().date()
+                        begin_hourly = date_to_datetime(begin_hourly)
+                        end = min(self.end, begin_hourly)
                 else:
                     end = self.end
                 yield self.query(topic_name, topic_code, geo_code, self.trends_request, self.begin, end,
@@ -1581,6 +1587,11 @@ class MinimalQueryList(QueryList):
         for topic_name, topic_code in self.topics.items():
             for geo_code, geo_name in self.geo.items():
                 filename = f'{self.directory}/{geo_code}-{topic_name}.csv'
+                filename_hourly = f'{self.directory_hourly}/{geo_code}-{topic_name}.csv'
+                if filename_hourly in self.delete_hourly:  # need to actualise the hourly data col
+                    if self.verbose:
+                        print(f'removing outdated hourly file ({filename_hourly})')
+                    os.remove(filename_hourly)
                 if os.path.exists(filename):
                     df_daily = pd.read_csv(filename, parse_dates=['date'], date_parser=date_parser_daily).set_index(
                         'date')
